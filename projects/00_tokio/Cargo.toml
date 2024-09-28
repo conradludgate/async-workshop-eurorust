@@ -2,5 +2,7 @@
 name = "project_00_tokio"
 version = "0.0.1"
 license.workspace = true
+edition.workspace = true
 
 [dependencies]
+tokio = { version = "1.40", features = ["full"] }
