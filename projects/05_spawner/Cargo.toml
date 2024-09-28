@@ -1,0 +1,6 @@
+[package]
+name = "project_05_spawner"
+version = "0.0.1"
+license.workspace = true
+
+[dependencies]

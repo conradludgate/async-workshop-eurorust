@@ -1,0 +1,6 @@
+[book]
+authors = ["Conrad Ludgate"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Async Deep Dive - Eurorust"

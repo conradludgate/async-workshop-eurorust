@@ -1,0 +1,6 @@
+[package]
+name = "project_01_future"
+version = "0.0.1"
+license.workspace = true
+
+[dependencies]
