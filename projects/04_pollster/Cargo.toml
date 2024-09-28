@@ -2,5 +2,6 @@
 name = "project_04_pollster"
 version = "0.0.1"
 license.workspace = true
+edition.workspace = true
 
 [dependencies]
