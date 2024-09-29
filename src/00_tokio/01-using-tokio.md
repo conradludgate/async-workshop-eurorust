@@ -112,7 +112,6 @@ async fn main() {
         tx2.send(2).expect("channel should not be closed");
     })
 
-    rx.next().await.unwrap();
     let first = rx.next().await.unwrap();
     let second = rx.next().await.unwrap();
     println!("received {first} {second}");
