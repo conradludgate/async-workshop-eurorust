@@ -64,7 +64,7 @@ pub fn block_on<F: Future>(f: F) -> F::Output {
             Poll::Pending => {
                 let mut worker = runtime.worker.lock().unwrap();
 
-                // park until we are notified to be ready.
+                // park until we are notified to be ready
                 while worker.state != WorkerState::Ready {
                     worker.state = WorkerState::Parked;
                     worker = runtime.park.wait(worker).unwrap();
