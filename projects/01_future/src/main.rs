@@ -5,12 +5,13 @@ use std::{
     time::Duration,
 };
 
-#[pin_project::pin_project]
-struct Select<F1, F2> {
-    #[pin]
-    left: F1,
-    #[pin]
-    right: F2,
+pin_project_lite::pin_project! {
+    struct Select<F1, F2> {
+        #[pin]
+        left: F1,
+        #[pin]
+        right: F2,
+    }
 }
 
 #[derive(Debug)]
