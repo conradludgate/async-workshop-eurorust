@@ -2,8 +2,19 @@
 
 If our asynchronous tasks are cooperative as we discussed before, how could we model that as a Rust trait?
 
+Let's use the following async function as a reference point:
+
+```rust
+async fn greet(name: String) {
+    println!("hello {name}");
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    println!("goodbye {name}");
+}
+```
+
 We know that our task will run until some point, at which it will choose to pause and return. The current task state should be saved
-so that it can be resumed later. We can then resume the task until it either pauses again, or completes and returns a value.
+so that it can be resumed later. We can then resume the task until it either pauses again, or completes and returns a value. In
+the example above, we will be pausing at the sleep stage.
 
 Since it has to update state, we know we will likely need a function that takes `&mut self`. Since the task will sometimes
 return nothing as it pauses, and sometimes returns a value when it completes, we need an enum to track which state it is in
