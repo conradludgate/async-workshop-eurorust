@@ -1,23 +1,6 @@
 # Task 1 - Using Tokio
 
-Before we can use tokio, we need to add it to our project.
-
-From the command-line, you can run:
-
-```sh
-cargo add -p project_00_tokio tokio --features full
-```
-
-Alternatively you can add the dependency directly in the Cargo.toml inside of the project:
-
-```toml
-[dependencies]
-tokio = { version = "1.40", features = ["full"] }
-```
-
----
-
-Once we have the tokio dependency installed to our project, we can write a simple async program.
+In the `project/00_tokio` folder, we can see a simple async program. Let's go through step by step what we have here.
 
 We shall start with the entrypoint. We must use the `#[tokio::main]` attribute if we want an async main function.
 
@@ -32,7 +15,7 @@ Let's next spawn some asynchronous tasks. Remember, these tasks execute synchron
 unsynchronise relative to all other tasks. Inside the main function we can write
 
 ```rust
-tokio::spawn(async {
+tokio::spawn(async move {
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     println!("hello after 2 seconds");
 })
@@ -50,8 +33,7 @@ We can resynchronise by introducing a channel.
  async fn main() {
 +    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
--    tokio::spawn(async {
-+    tokio::spawn(async move {
+     tokio::spawn(async move {
          tokio::time::sleep(std::time::Duration::from_secs(2)).await;
          println!("hello after 2 seconds");
 +        tx.send(()).expect("channel should not be closed");
