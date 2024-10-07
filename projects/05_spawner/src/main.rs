@@ -147,27 +147,29 @@ pub fn spawn<F: Future<Output = ()> + Send + 'static>(f: F) {
 }
 
 fn main() {
-    let start = std::time::Instant::now();
-    let deadline = start + std::time::Duration::from_secs(1);
-    let woken = block_on(async {
-        std::future::poll_fn(|cx| {
-            let now = std::time::Instant::now();
-            if now < deadline {
-                let waker = cx.waker().clone();
-                std::thread::spawn(move || {
-                    let now = std::time::Instant::now();
-                    std::thread::sleep(deadline - now);
-                    waker.wake();
-                });
-                Poll::Pending
-            } else {
-                Poll::Ready(now)
-            }
-        })
-        .await
+    block_on(async move {
+        let (watch_tx, watch_rx) = tokio::sync::watch::channel(true);
+
+        for i in 0..10 {
+            let mut watch_rx = watch_rx.clone();
+            spawn(async move {
+                // wait until we are no longer running
+                watch_rx.wait_for(|running| !*running).await.unwrap();
+                // bad_sleep(start + std::time::Duration::from_secs(1)).await;
+                println!("completed {i}")
+            });
+        }
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            watch_tx.send(false).unwrap();
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            tx.send(()).unwrap();
+        });
+
+        rx.await.unwrap();
     });
 
-    let lag = woken - deadline;
-
-    println!("{lag:?}");
+    println!("done");
 }

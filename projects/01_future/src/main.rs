@@ -14,12 +14,6 @@ pin_project_lite::pin_project! {
     }
 }
 
-#[derive(Debug)]
-enum Either<L, R> {
-    Left(L),
-    Right(R),
-}
-
 impl<F1: Future, F2: Future> Future for Select<F1, F2> {
     type Output = Either<F1::Output, F2::Output>;
 
@@ -38,6 +32,16 @@ impl<F1: Future, F2: Future> Future for Select<F1, F2> {
     }
 }
 
+#[derive(Debug)]
+enum Either<L, R> {
+    Left(L),
+    Right(R),
+}
+
+async fn select<A: Future, B: Future>(left: A, right: B) -> Either<A::Output, B::Output> {
+    Select { left, right }.await
+}
+
 #[tokio::main]
 async fn main() {
     let (tx, rx) = tokio::sync::oneshot::channel();
@@ -47,10 +51,10 @@ async fn main() {
         let _ = tx.send(());
     });
 
-    let res = Select {
-        left: tokio::time::sleep(Duration::from_secs(3)),
-        right: rx,
-    };
+    let left = tokio::time::sleep(Duration::from_secs(3));
+    let right = rx;
 
-    println!("raced: {:?}", res.await);
+    let res = select(left, right).await;
+
+    println!("raced: {:?}", res);
 }

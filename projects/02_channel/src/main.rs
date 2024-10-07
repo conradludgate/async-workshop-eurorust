@@ -85,6 +85,8 @@ impl<T> Drop for Sender<T> {
     }
 }
 
+/// Creates an unbounded mpsc channel for communicating between asynchronous
+/// tasks without backpressure.
 pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
     let channel = Arc::new(Mutex::new(Channel {
         data: VecDeque::new(),

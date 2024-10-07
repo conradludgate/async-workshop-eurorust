@@ -80,27 +80,14 @@ pub fn block_on<F: Future>(f: F) -> F::Output {
 }
 
 fn main() {
-    let start = std::time::Instant::now();
-    let deadline = start + std::time::Duration::from_secs(1);
-    let woken = block_on(async {
-        std::future::poll_fn(|cx| {
-            let now = std::time::Instant::now();
-            if now < deadline {
-                let waker = cx.waker().clone();
-                std::thread::spawn(move || {
-                    let now = std::time::Instant::now();
-                    std::thread::sleep(deadline - now);
-                    waker.wake();
-                });
-                Poll::Pending
-            } else {
-                Poll::Ready(now)
-            }
-        })
-        .await
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        tx.send("hello world").unwrap();
     });
 
-    let lag = woken - deadline;
+    let value = block_on(async { rx.await.unwrap() });
 
-    println!("{lag:?}");
+    println!("{value}");
 }
