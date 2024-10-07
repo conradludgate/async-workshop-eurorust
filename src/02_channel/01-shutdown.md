@@ -9,6 +9,8 @@ of the senders alive. Ideally they will gracefully handle when there are no task
 that will possibly listen to the message, and not bother wasting memory.
 Perhaps also returning a value to indicate that it was closed.
 
+![](./recv_close.png)
+
 ## Closing the senders
 
 It's also possible that we have dropped all the senders of a channel while the receiver is still alive.
@@ -18,3 +20,5 @@ we could check if there are any senders.
 
 However, another edge case that shows up is when we are currently waiting for a value from the channel, and the
 last sender is dropped. In this case we would somehow need to notify the channel receiver that it is time to give up the waiting.
+
+![](./send_close.png)
