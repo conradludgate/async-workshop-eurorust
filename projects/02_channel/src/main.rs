@@ -1,7 +1,7 @@
 use std::{
     collections::VecDeque,
     future::poll_fn,
-    sync::{Arc, Mutex, Weak},
+    sync::{Arc, Mutex},
     task::{Poll, Waker},
     time::Duration,
 };
@@ -10,8 +10,12 @@ use tokio::time::Instant;
 
 struct Channel<T> {
     data: VecDeque<T>,
-    // The single consumer waker, if any
+    /// The single consumer waker, if any
     recv: Option<Waker>,
+    /// is the receiver still there?
+    receiver: bool,
+    /// how many senders are still there?
+    senders: usize,
 }
 
 pub struct Receiver<T> {
@@ -21,30 +25,35 @@ pub struct Receiver<T> {
 impl<T> Receiver<T> {
     pub async fn recv(&mut self) -> Option<T> {
         poll_fn(|cx| {
-            match Arc::get_mut(&mut self.channel) {
-                // all receivers have hung up, so we have exclusive access
-                Some(channel) => Poll::Ready(channel.get_mut().unwrap().data.pop_front()),
-                None => {
-                    let mut channel = self.channel.lock().unwrap();
-                    if let Some(t) = channel.data.pop_front() {
-                        return Poll::Ready(Some(t));
-                    }
-
-                    // set our waker and return pending to pause
-                    // we will resume when the waker is used.
-                    channel.recv = Some(cx.waker().clone());
-                    Poll::Pending
-                }
+            let mut channel = self.channel.lock().unwrap();
+            if let Some(t) = channel.data.pop_front() {
+                return Poll::Ready(Some(t));
             }
+
+            if channel.senders == 0 {
+                return Poll::Ready(None);
+            }
+
+            // set our waker and return pending to pause
+            // we will resume when the waker is used.
+            channel.recv = Some(cx.waker().clone());
+            Poll::Pending
         })
         .await
     }
 }
 
-#[derive(Clone)]
+// Try and wake the receiver if we are the last sender to drop.
+// This ensures the sender will known when to exit
+impl<T> Drop for Receiver<T> {
+    fn drop(&mut self) {
+        let mut channel = self.channel.lock().unwrap();
+        channel.receiver = false;
+    }
+}
+
 pub struct Sender<T> {
-    channel: Weak<Mutex<Channel<T>>>,
-    sender: Arc<()>,
+    channel: Arc<Mutex<Channel<T>>>,
 }
 
 impl<T: Send> Sender<T> {
@@ -54,10 +63,11 @@ impl<T: Send> Sender<T> {
     ///
     /// Errors if the channel is closed.
     pub fn send(&self, t: T) -> Result<(), T> {
-        let Some(channel) = self.channel.upgrade() else {
+        let mut channel = self.channel.lock().unwrap();
+        if !channel.receiver {
             return Err(t);
-        };
-        let mut channel = channel.lock().unwrap();
+        }
+
         channel.data.push_back(t);
 
         if let Some(waker) = channel.recv.take() {
@@ -68,19 +78,26 @@ impl<T: Send> Sender<T> {
     }
 }
 
+impl<T> Clone for Sender<T> {
+    fn clone(&self) -> Self {
+        let mut channel = self.channel.lock().unwrap();
+        channel.senders += 1;
+        Self {
+            channel: Arc::clone(&self.channel),
+        }
+    }
+}
+
 // Try and wake the receiver if we are the last sender to drop.
 // This ensures the sender will known when to exit
 impl<T> Drop for Sender<T> {
     fn drop(&mut self) {
-        let Some(_last_sender) = Arc::get_mut(&mut self.sender) else {
-            return;
-        };
-        let Some(channel) = self.channel.upgrade() else {
-            return;
-        };
-        let mut channel = channel.lock().unwrap();
-        if let Some(waker) = channel.recv.take() {
-            waker.wake();
+        let mut channel = self.channel.lock().unwrap();
+        channel.senders -= 1;
+        if channel.senders == 0 {
+            if let Some(waker) = channel.recv.take() {
+                waker.wake();
+            }
         }
     }
 }
@@ -91,12 +108,12 @@ pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
     let channel = Arc::new(Mutex::new(Channel {
         data: VecDeque::new(),
         recv: None,
+        receiver: true,
+        senders: 1,
     }));
-    let sender = Arc::new(());
 
     let tx = Sender {
-        channel: Arc::downgrade(&channel),
-        sender,
+        channel: Arc::clone(&channel),
     };
     let rx = Receiver { channel };
     (tx, rx)
