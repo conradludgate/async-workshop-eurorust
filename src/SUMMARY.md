@@ -9,7 +9,6 @@
     - [Tutorial - Pin](./01_future/how-to-pin.md)
     - [Task 1 - Writing a select future](./01_future/task.md)
 - [Chapter 2 - Writing an async mpsc channel](./02_channel/index.md)
-    - [Tutorial - What is a mpsc channel](./02_channel/00-channel.md)
     - [Tangent - Channel shutdown](./02_channel/01-shutdown.md)
     - [Task 1 - Writing our own mpsc](./02_channel/02-task.md)
 - [Chapter 3 - Writing an async mutex](./03_mutex/index.md)
