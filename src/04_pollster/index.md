@@ -122,3 +122,164 @@ fn block_on<F: Future>(f: F) -> F::Output {
 And now our code should run. Try it!
 
 The only problem is that it uses 100% CPU while it's running. Not great!
+
+---
+
+Now, how do we tackle the issue of allowing our mini-runtime to sleep.
+
+The `Condvar` type in the standard library offers a powerful primitive to
+allow one thread to `Condvar::wait`, and then wake up when another thread runs `Condvar::notify_one`.
+
+Let's introduce a new `Runtime` struct to contain some useful state.
+
+```rust
+struct Runtime {
+    park: Condvar,
+    worker: Mutex<Worker>,
+}
+
+/// Tracks a single runtime worker state.
+/// Currently we only have 1 worker in our runtime.
+struct Worker {}
+```
+
+Then we should update our waker accordingly
+
+```rust
+struct SimpleWaker {
+    runtime: Arc<Runtime>,
+}
+
+impl Wake for SimpleWaker {
+    fn wake(self: Arc<Self>) {
+        // notify the main thread
+        self.park.notify_one();
+    }
+}
+```
+
+Finally, we need to update our poll-loop to wait on the condvar:
+
+```rust
+/// Turns an async function into a blocking function
+fn block_on<F: Future>(f: F) -> F::Output {
+    // futures must be pinned to be polled!
+    let mut f = std::pin::pin!(f);
+
+    // create our runtime state
+    let runtime = Arc::new(Runtime {
+        park: Condvar::new(),
+        worker: Mutex::new(Worker {}),
+    });
+
+    let root_waker_state = Arc::new(SimpleWaker {
+        runtime: Arc::clone(&runtime),
+    });
+    let root_waker = Waker::from(root_waker_state);
+
+    loop {
+        let mut cx = Context::from_waker(&root_waker);
+        match f.as_mut().poll(&mut cx) {
+            Poll::Ready(r) => break r,
+            Poll::Pending => {
+                // park until later
+                let mut worker = runtime.worker.lock().unwrap();
+                worker = runtime.park.wait(worker);
+
+                continue;
+            },
+        }
+    }
+}
+```
+
+---
+
+Theoretically this should all work fine. However, there's a few low-hanging fruits for efficiency.
+Should we get a lot of `wake()` calls, they will all be hitting the `Condvar::notify_one` even if the worker thread is active.
+This is not ideal. Additionally, `Condvar::wait` is susceptible to 'spurious' wake ups, meaning it can wake up even
+if not explicitly notified.
+
+There is also an unfortunate race condition we need to handle where if the task wakes itself up, we don't want to park at all!
+
+Let's update the code one more time to introduce a WorkerState.
+
+```rust
+struct Worker {
+    state: WorkerState,
+}
+
+#[derive(PartialEq)]
+enum WorkerState {
+    /// Is the worker thread currently running a task
+    Running,
+    /// Is the worker thread ready to continue
+    Ready,
+    /// Is the worker thread parked
+    Parked,
+}
+```
+
+Next, let's update the waker to action on these states:
+
+```rust
+
+impl Wake for SimpleWaker {
+    fn wake(self: Arc<Self>) {
+        let mut worker = self.worker.lock().unwrap();
+
+        if worker.state == WorkerState::Parked {
+            // notify the main parked thread
+            self.park.notify_one();
+        }
+
+        // announce there is a task ready.
+        worker.state = WorkerState::Ready;
+    }
+}
+```
+
+And finally, let's make sure we keep track of the state while in our loop.
+
+```rust
+/// Turns an async function into a blocking function
+fn block_on<F: Future>(f: F) -> F::Output {
+    // futures must be pinned to be polled!
+    let mut f = std::pin::pin!(f);
+
+    // create our runtime state
+    let runtime = Arc::new(Runtime {
+        park: Condvar::new(),
+        worker: Mutex::new(Worker {
+            // we start in the running state.
+            state: WorkerState::Running,
+        }),
+    });
+
+    let root_waker_state = Arc::new(SimpleWaker {
+        runtime: Arc::clone(&runtime),
+    });
+    let root_waker = Waker::from(root_waker_state);
+
+    loop {
+        let mut cx = Context::from_waker(&root_waker);
+        match f.as_mut().poll(&mut cx) {
+            Poll::Ready(r) => break r,
+            Poll::Pending => {
+                let mut worker = runtime.worker.lock().unwrap();
+                while worker.state != WorkerState::Ready {
+                    // park until we are ready later
+                    worker.state = WorkerState::Parked;
+                    worker = runtime.park.wait(worker);
+                }
+
+                // resume the loop and mark as running again
+                worker.state = WorkerState::Running;
+                continue;
+            },
+        }
+    }
+}
+```
+
+And just like that, a fully functional single-task runtime that correctly sleeps when not active.
