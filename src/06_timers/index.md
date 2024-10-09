@@ -29,6 +29,8 @@ async fn sleep(dur: Duration) {
 }
 ```
 
+![](./bad_sleep.png)
+
 However, can we avoid spawning a thread per sleeping task? Maybe we could fold it into thread parking functionality as well.
 
 ---
@@ -74,3 +76,5 @@ impl Ord for TimerEntry {
 ```
 
 Now it's your turn to piece this all together
+
+![](./better_sleep.png)
