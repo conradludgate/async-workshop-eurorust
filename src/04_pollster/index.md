@@ -223,7 +223,6 @@ enum WorkerState {
 Next, let's update the waker to action on these states:
 
 ```rust
-
 impl Wake for SimpleWaker {
     fn wake(self: Arc<Self>) {
         let mut worker = self.worker.lock().unwrap();

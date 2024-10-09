@@ -8,9 +8,11 @@ Asynchronous execution means the lack of synchronous execution.
 Synchronous execution means that tasks are executed in a synchronised fashion.
 This could mean that a synchronous task will wait for the previous task to complete before it continues.
 
-Some tasks are necessarily synchronous, but not tasks need to be synchronised together. For example,
+Some tasks are necessarily synchronous, but not all tasks need to be synchronised together. For example,
 one thread can execute a synchronous set of tasks, but it is asynchronous with all the other threads by default.
-We can then resynchonrise threads are specific points using features like **Mutexes** and **Channels**
+We can then resynchonrise threads at specific points using features like **Mutexes** and **Channels**
+
+![](./sync.png)
 
 In Rust, asynchronous execution often holds a stronger cultural meaning, which means it uses
 the `async/.await` features of Rust. This is what we mean when we say that Tokio is an "asynchronous runtime".
