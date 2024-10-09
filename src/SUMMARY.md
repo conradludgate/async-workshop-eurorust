@@ -1,5 +1,6 @@
 # Summary
 
+- [Introduction](./index.md)
 - [Chapter 0 - Getting started with Tokio](./00_tokio/index.md)
     - [Task 0 - Creating our workspace](./00_tokio/00-workspace.md)
     - [Task 1 - Using Tokio](./00_tokio/01-using-tokio.md)
